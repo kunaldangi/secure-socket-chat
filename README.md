@@ -1,3 +1,3 @@
 # socket-chat
 
-A chat application that demonstrate the implementation of multiple client/users connected to single admin server architecture, application is completely made from scratch using the standard socket library.
+A chat application that demonstrates the implementation of multiple clients/users connected to a single admin server architecture. The application is built completely from scratch using the standard socket library.

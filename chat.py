@@ -1,6 +1,7 @@
 import socket
 import threading
 import tkinter as tk
+import ssl
 # import tkinter.ttk as ttk
 
 client_socket = None
@@ -12,32 +13,48 @@ frame1 = None
 window = tk.Tk()
 window.geometry("600x400")
 
+context = ssl.create_default_context()
+context.check_hostname = False
+context.verify_mode = ssl.CERT_NONE  # Disable verification for local testing
 
-def recieve_message(client_socket):
+def recieve_message():
+    global client_socket
     while True:
-        response = client_socket.recv(1024) # Receive a response from the server
-        print(f"Server: {response.decode()}")
-        if "Status:200" != response.decode():
-            greeting = tk.Label(frame1, text=f"{response.decode()}")
-            greeting.pack()
+        try:
+            response = client_socket.recv(1024) # Receive a response from the server
+            if not response:
+                break  # Connection closed
 
-            frame1.update_idletasks()
-            canvas.config(scrollregion=canvas.bbox("all"))
-            canvas.yview_moveto(1.0)
+            print(f"Server: {response.decode()}")
+            if "Status:200" != response.decode():
+                greeting = tk.Label(frame1, text=f"{response.decode()}")
+                greeting.pack()
+
+                frame1.update_idletasks()
+                canvas.config(scrollregion=canvas.bbox("all"))
+                canvas.yview_moveto(1.0)
+
+        except (ConnectionResetError, OSError):
+            print("Connection lost.")
+            break
 
 
 def connect_to_server(connect_input, port_input, filewin):
     global client_socket
-    client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM) # Create a socket object
-    server_address = (str(connect_input.get()), int(port_input.get())) # Define the server address and port
-    client_socket.connect(server_address) # Connect to the server
+    try:
+        raw_socket = socket.create_connection((connect_input.get(), int(port_input.get())))
+        client_socket = context.wrap_socket(raw_socket, server_hostname=connect_input.get())
 
-    # send_thread = threading.Thread(target=send_message, args=(client_socket, )) # Create a new thread to handle the client
-    # send_thread.start()
-    recieve_thread = threading.Thread(target=recieve_message, args=(client_socket, )) # Create a new thread to handle the client
-    recieve_thread.start()
 
-    filewin.destroy()
+        # send_thread = threading.Thread(target=send_message, args=(client_socket, )) # Create a new thread to handle the client
+        # send_thread.start()
+        receive_thread = threading.Thread(target=recieve_message, daemon=True) # Create a new thread to handle the client
+        receive_thread.start()
+
+        filewin.destroy()
+
+    except Exception as e:
+        print(f"Connection failed: {e}")
 
 def connect_page():
     filewin = tk.Toplevel(window)
@@ -53,14 +70,19 @@ def connect_page():
     port_input = tk.Entry(filewin)
     port_input.pack()
 
-    connect_btn = tk.Button(filewin, text="Connect", command=lambda ci=connect_input, pi=port_input, win=filewin : connect_to_server(ci, pi, win))
+    connect_btn = tk.Button(filewin, text="Connect", command=lambda: connect_to_server(connect_input, port_input, filewin))
     connect_btn.pack()
 
 
 def disconnect():
-    client_socket.close()
-    client_socket = None
-    server_address = None
+    global client_socket
+    if client_socket:
+        try:
+            client_socket.close()
+            print("Disconnected.")
+        except Exception as e:
+            print(f"Error closing connection: {e}")
+        client_socket = None
 
 menubar = tk.Menu(window)
 filemenu = tk.Menu(menubar, tearoff=0)
@@ -84,10 +106,6 @@ scrollbar.config(command=canvas.yview)
 frame1 = tk.Frame(canvas)
 canvas.create_window((0, 0), window=frame1, anchor=tk.NW)
 
-# for x in range(2):
-#     greeting = tk.Label(frame1, text=f"Hello, Tkinter {x}")
-#     greeting.pack()
-
 frame1.update_idletasks()
 canvas.config(scrollregion=canvas.bbox("all"))
 
@@ -98,15 +116,21 @@ send_input = tk.Entry(frame2)
 send_input.pack(fill=tk.X)
 
 def send_message(send_input):
-    message = str(send_input.get())
-    client_socket.send(message.encode())
+    global client_socket
+    if client_socket:
+        try:
+            message = str(send_input.get())
+            client_socket.send(message.encode())
 
-    greeting = tk.Label(frame1, text=f"You: {message}")
-    greeting.pack()
+            greeting = tk.Label(frame1, text=f"You: {message}")
+            greeting.pack()
 
-    frame1.update_idletasks()
-    canvas.config(scrollregion=canvas.bbox("all"))
-    canvas.yview_moveto(1.0)
+            frame1.update_idletasks()
+            canvas.config(scrollregion=canvas.bbox("all"))
+            canvas.yview_moveto(1.0)
+
+        except (BrokenPipeError, OSError):
+            print("Error: Connection lost while sending message.")
 
 send_btn = tk.Button(send_input, text="Send", command=lambda ip=send_input: send_message(ip))
 send_btn.pack(side=tk.RIGHT)

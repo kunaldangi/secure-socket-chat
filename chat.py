@@ -58,7 +58,9 @@ def connect_page():
 
 
 def disconnect():
-    pass
+    client_socket.close()
+    client_socket = None
+    server_address = None
 
 menubar = tk.Menu(window)
 filemenu = tk.Menu(menubar, tearoff=0)

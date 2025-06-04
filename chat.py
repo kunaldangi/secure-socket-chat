@@ -12,6 +12,7 @@ frame1 = None
 
 window = tk.Tk()
 window.geometry("600x400")
+window.title("Secure Socket Chat")
 
 context = ssl.create_default_context()
 context.check_hostname = False
